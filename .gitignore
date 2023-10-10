@@ -1,0 +1,17 @@
+# folders
+build/
+dist/
+SGN/
+__pycache__/
+data/
+
+#files
+news.ipynb
+SGN.rar
+SGN.spec
+generatedTokens.csv
+articles.xlsx
+glove.6B.300d.txt
+IMDB Dataset.csv
+new.h5
+test_model.h5
