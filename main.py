@@ -1,10 +1,14 @@
-import requests
-import pandas as pd
-import subprocess
-import time
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 import json
+import subprocess
+from datetime import datetime
+import pandas as pd
+from fastapi import FastAPI
+import numpy as np
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tensorflow as tf
+from tokenization import tokenizer
+import requests
+
 
 # fastAPI
 
@@ -14,27 +18,25 @@ app = FastAPI()
 def read_root():
    return {"Welcome to": "Some Good News"}
 
-# generate token for iam
-@app.get("/gen_token")
-def generate_token():
-    process = subprocess.Popen(["python", "refresh_generated_token.py"])
-    tokens = pd.read_csv('generatedTokens.csv')
-    time.sleep(10)
-    process.terminate()
-    process.wait()
-    return {"Token":tokens.iloc[-1]}
-
 
 # fetch articles
 @app.get("/good_news/")
 def all_articles():
+
+    # lists for df
+    title = []
+    date = []
+    url = []
+    prediction = []
+
     api = 'b456a0b678604587bd37dfe28a0bf520'
 
     base_url = 'https://newsapi.org/v2/everything'
 
     params = {
         'source': 'bbc-news',
-        'q': 'world',
+        'q': '+good',
+        'language': 'en',
         'sortBy': 'publishedAt',
         'apiKey': api
     }
@@ -46,43 +48,39 @@ def all_articles():
     articles = data['articles']
 
 
-# token access to CSAT
-
-    generatedTokens = pd.read_csv("generatedTokens.csv")
-    ca_accessToken = generatedTokens["access_token"].iloc[-1]
-
     # fetch sentiment analysis results
-    responses = []
+    model = tf.keras.models.load_model('new.h5')
 
-    for article in articles[:5]:
-        article_response = {}
-        data = {'text': article['description'],'accessToken': ca_accessToken}
-        response = requests.post("https://csat.alamedaproject.eu/classes", json=data)
-        article_response['title'] = article['title']
-        article_response['content'] = article['content']
-        article_response['date'] = article['publishedAt']
-        article_response['url'] = article['url']
-        article_response['response'] = response.json()
-        responses.append(article_response)
-        response.close()
+    for article in articles[:100]:
+        og_date = pd.to_datetime(article['publishedAt'])
+        formatted_date = og_date.strftime("%A %dth of %B at %H:%M:%S")
+        txt_seq = tokenizer.texts_to_sequences([article['content']])
+        pad_seq = pad_sequences(txt_seq, maxlen=100, padding='post')
+        pred = model.predict(pad_seq)
+        if np.argmax(pred) == 0:
+            if article['title'] != '[Removed]':
+                title.append(article['title'])
+                date.append(formatted_date)
+                url.append(article['url'])
+                prediction.append(pred[np.argmax(pred)][0])
+
+            # responses.append(article)
         
-    # dataframe creation
-    title = []
-    date = []
-    url = []
-
-    for response in responses:
-        # can adjust confidence level
-        if response['response']['sentiment_classes'][0]['sentiment_score'] > 0:   # positive: 0, neutral: 1, negative: 2
-            title.append(response['title'])
-            date.append(response['date'])
-            url.append(response['url'])
 
 
-    df = pd.DataFrame([title,date,url]).T
-    df.columns = ['title','date','url']
+    # for response in responses:
+    #     if response['title'] != '[Removed]':
+    #         title.append(response['title'])
+    #         date.append(response['publishedAt'])
+    #         url.append(response['url'])
 
-    df_json = json.loads(df.to_json(orient='records'))
+
+    df = pd.DataFrame([title,date,url,prediction]).T
+    df.columns = ['title','date','url','prediction']
+    df = df.sort_values(by='prediction', ascending=False)
+    df.to_excel('articles.xlsx')
+
+    df_json = json.loads(df.iloc[:10].to_json(orient='records'))
     return df_json
     
 
