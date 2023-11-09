@@ -47,8 +47,8 @@ def all_articles():
     base_url = 'https://newsapi.org/v2/everything'
 
     params = {
-        'source': 'bbc-news',
-        'q': '+good',
+        'source': 'reddit.com',
+        'q':'good',
         'language': 'en',
         'sortBy': 'publishedAt',
         'apiKey': api
@@ -67,7 +67,7 @@ def all_articles():
     # fetch sentiment analysis results
     model = tf.keras.models.load_model('new.h5')
 
-    for article in articles[:5]:
+    for article in articles[:50]:
         og_date = pd.to_datetime(article['publishedAt'])
         formatted_date = og_date.strftime("%A %dth of %B at %H:%M:%S")
         txt_seq = tokenizer.texts_to_sequences([article['content']])
